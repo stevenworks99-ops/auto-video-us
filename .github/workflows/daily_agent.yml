@@ -17,14 +17,13 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Font & Alat
-        run: |
-          sudo apt-get update && sudo apt-get install -y fonts-liberation
-          pip install -r requirements.txt
+      - name: Install Alat
+        run: pip install -r requirements.txt
 
-      - name: Buat Video Otomatis HD
+      - name: Buat Video Kualitas Studio
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: python agent.py
 
       - name: Simpan Hasil Video
