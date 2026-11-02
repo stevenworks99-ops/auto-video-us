@@ -10,6 +10,8 @@ from moviepy.editor import (
 
 api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 PIXABAY_KEY = os.environ.get("PIXABAY_API_KEY", "").strip()
+MAKE_URL = os.environ.get("MAKE_WEBHOOK_URL", "").strip()
+
 if api_key:
     genai.configure(api_key=api_key)
 
@@ -51,7 +53,7 @@ asyncio.run(make_audio())
 voice_clip = AudioFileClip("voice.mp3")
 total_dur = voice_clip.duration
 
-# 3. Buat Dark Cinematic Backsound (Bebas Copyright & Anti-Error)
+# 3. Buat Dark Cinematic Backsound
 sample_rate = 44100
 t = np.linspace(0, total_dur, int(sample_rate * total_dur), endpoint=False)
 drone = 0.035 * (np.sin(2 * np.pi * 55 * t) + 0.5 * np.sin(2 * np.pi * 110 * t))
@@ -64,7 +66,7 @@ with wave.open("bgm.wav", "w") as wf:
 bgm_clip = AudioFileClip("bgm.wav")
 final_audio = CompositeAudioClip([bgm_clip, voice_clip])
 
-# 4. Ambil Video HD Asli dari Pixabay (Otomatis Potong Vertikal 9:16)
+# 4. Ambil Video HD Asli dari Pixabay
 video_clips = []
 if PIXABAY_KEY:
     for idx, kw in enumerate(data["keywords"][:3]):
@@ -85,7 +87,6 @@ if PIXABAY_KEY:
                         vc = vc.resize(width=1080)
                     x_center = int((vc.w - 1080) // 2)
                     vc = vc.crop(x1=x_center, y1=0, width=1080, height=1920)
-                    # Batasi tiap adegan maksimal 4 detik agar dinamis
                     vc = vc.subclip(0, min(4.0, vc.duration))
                     video_clips.append(vc)
         except Exception as e:
@@ -94,12 +95,11 @@ if PIXABAY_KEY:
 if video_clips:
     bg_video = concatenate_videoclips(video_clips, method="compose").loop(duration=total_dur)
 else:
-    # Cadangan jika belum isi PIXABAY_API_KEY: buat video bergerak dari Pollinations
     bg_video = ColorClip(size=(1080, 1920), color=(15, 15, 22), duration=total_dur)
 
 dark_layer = ColorClip(size=(1080, 1920), color=(0, 0, 0), duration=total_dur).set_opacity(0.4)
 
-# 5. Buat Teks Pop-Up Cepat (Per 2 Kata) Presisi Sesuai Jumlah Huruf
+# 5. Buat Teks Pop-Up Cepat
 font_paths = [
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -117,7 +117,6 @@ total_chars = sum(len(g) for g in groups) or 1
 sub_clips = []
 curr_t = 0.0
 for idx, text_str in enumerate(groups):
-    # Durasi tampil dihitung proporsional sesuai panjang kata agar pas dengan suara
     dur_t = (len(text_str) / total_chars) * (total_dur - 0.2)
     dur_t = max(0.2, dur_t)
 
@@ -125,8 +124,6 @@ for idx, text_str in enumerate(groups):
     draw = ImageDraw.Draw(img)
     lines = textwrap.wrap(text_str, width=14)
     y_pos = 880 - (len(lines) * 45)
-
-    # Warna bergantian Kuning Emas & Putih Bersih
     color = (255, 215, 0, 255) if idx % 2 == 0 else (255, 255, 255, 255)
 
     for line in lines:
@@ -140,9 +137,20 @@ for idx, text_str in enumerate(groups):
     sub_clips.append(sc)
     curr_t += dur_t
 
-# 6. Render Final HD
+# 6. Render Final & Simpan File
 final = CompositeVideoClip([bg_video, dark_layer] + sub_clips).set_audio(final_audio).set_duration(total_dur)
 final.write_videofile("final_video.mp4", fps=30, codec="libx264", audio_codec="aac", bitrate="8000k")
 
 with open("caption.txt", "w") as f:
     f.write(data["caption"])
+
+# 7. Kirim Otomatis ke Make.com Webhook
+if MAKE_URL:
+    try:
+        with open("final_video.mp4", "rb") as vf:
+            files = {"video": vf}
+            payload = {"caption": data["caption"], "script": data["script"]}
+            response = requests.post(MAKE_URL, data=payload, files=files, timeout=60)
+            print("Kirim ke Make.com Status:", response.status_code)
+    except Exception as e:
+        print("Gagal kirim ke Make.com:", e)
