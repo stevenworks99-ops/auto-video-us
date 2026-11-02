@@ -17,10 +17,12 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Alat
-        run: pip install -r requirements.txt
+      - name: Install Font & Alat
+        run: |
+          sudo apt-get update && sudo apt-get install -y fonts-liberation
+          pip install -r requirements.txt
 
-      - name: Buat Video Otomatis
+      - name: Buat Video Otomatis HD
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python agent.py
